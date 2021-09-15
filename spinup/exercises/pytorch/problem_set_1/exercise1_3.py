@@ -209,8 +209,10 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         #   YOUR CODE HERE    #
         #                     #
         #######################
-        # q1 = 
-        # q2 = 
+        # Find actual q-values of state-action pairs
+        # Documentation says to flatten, but am not sure why
+        q1 = ac.q1(obs=o, act=a).flatten()
+        q2 = ac.q2(obs=o, act=a).flatten()
 
         # Target policy smoothing
         #######################
@@ -218,6 +220,12 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         #   YOUR CODE HERE    #
         #                     #
         #######################
+        # Compute actions that target policy would take from s'
+        raw_target_actions = ac_targ.pi(o2)
+        # Compute noise tensor of same shape as raw_target_actions
+        target_action_noise = torch.clamp(target_noise * torch.randn_like(raw_target_actions), min=-noise_clip, max=noise_clip)
+        # Add noise to target action
+        target_actions = torch.clamp(target_action_noise + raw_target_actions, min=-act_limit, max=act_limit)
 
         # Target Q-values
         #######################
@@ -225,6 +233,11 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         #   YOUR CODE HERE    #
         #                     #
         #######################
+        # Calculate target q values
+        q1_target_values = ac_targ.q1(obs=o2, act=target_actions).flatten()
+        q2_target_values = ac_targ.q2(obs=o2, act=target_actions).flatten()
+        min_target_values = torch.min(input=q1_target_values, other=q2_target_values)
+        target_values = r + gamma*(1-d)*min_target_values
 
         # MSE loss against Bellman backup
         #######################
@@ -232,9 +245,9 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         #   YOUR CODE HERE    #
         #                     #
         #######################
-        # loss_q1 = 
-        # loss_q2 = 
-        # loss_q = 
+        loss_q1 = ((q1-target_values)**2).mean()
+        loss_q2 = ((q2-target_values)**2).mean()
+        loss_q = (loss_q1 + loss_q2)
 
         # Useful info for logging
         loss_info = dict(Q1Vals=q1.detach().numpy(),
@@ -249,7 +262,8 @@ def td3(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         #   YOUR CODE HERE    #
         #                     #
         #######################
-        # loss_pi = 
+        # Multiply by -1 to perform gradient ascent instead of descent
+        loss_pi = -1*(ac.q1(obs=data['obs'], act=ac.pi(data['obs'])).flatten().mean())
         return loss_pi
 
     #=========================================================================#
@@ -405,7 +419,7 @@ if __name__ == '__main__':
         actor_critic=core.MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[128,128]), 
         max_ep_len=150,
-        seed=args.seed, 
+        seed=args.seed,
         logger_kwargs=logger_kwargs,
         epochs=10
         )

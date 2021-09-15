@@ -89,5 +89,5 @@ if __name__ == '__main__':
     eg.add('seed', [10*i for i in range(args.num_runs)])
     eg.add('epochs', int(args.total_steps / args.steps_per_epoch))
     eg.add('steps_per_epoch', args.steps_per_epoch)
-    eg.add('bugged', [False, True])
+    eg.add('bugged', [True])
     eg.run(ddpg_with_actor_critic, datestamp=True)

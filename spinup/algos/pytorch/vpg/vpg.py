@@ -77,8 +77,8 @@ class VPGBuffer:
         assert self.ptr == self.max_size    # buffer has to be full before you can get
         self.ptr, self.path_start_idx = 0, 0
         # the next two lines implement the advantage normalization trick
-        adv_mean, adv_std = mpi_statistics_scalar(self.adv_buf)
-        self.adv_buf = (self.adv_buf - adv_mean) / adv_std
+        # adv_mean, adv_std = mpi_statistics_scalar(self.adv_buf)
+        # self.adv_buf = (self.adv_buf - adv_mean) / adv_std
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     adv=self.adv_buf, logp=self.logp_buf)
         return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in data.items()}
@@ -177,14 +177,14 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
     """
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
-    setup_pytorch_for_mpi()
+    # setup_pytorch_for_mpi()
 
     # Set up logger and save configuration
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
 
     # Random seed
-    seed += 10000 * proc_id()
+    # seed += 10000 * proc_id()
     torch.manual_seed(seed)
     np.random.seed(seed)
 
@@ -216,7 +216,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
         loss_pi = -(logp * adv).mean()
 
         # Useful extra info
-        approx_kl = (logp_old - logp).mean().item()
+        approx_kl = (1 - logp).mean().item()
         ent = pi.entropy().mean().item()
         pi_info = dict(kl=approx_kl, ent=ent)
 
@@ -246,7 +246,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
         pi_optimizer.zero_grad()
         loss_pi, pi_info = compute_loss_pi(data)
         loss_pi.backward()
-        mpi_avg_grads(ac.pi)    # average grads across MPI processes
+        # mpi_avg_grads(ac.pi)    # average grads across MPI processes
         pi_optimizer.step()
 
         # Value function learning
@@ -254,7 +254,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
             vf_optimizer.zero_grad()
             loss_v = compute_loss_v(data)
             loss_v.backward()
-            mpi_avg_grads(ac.v)    # average grads across MPI processes
+            # mpi_avg_grads(ac.v)    # average grads across MPI processes
             vf_optimizer.step()
 
         # Log changes from update
@@ -339,12 +339,14 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='vpg')
     args = parser.parse_args()
 
-    mpi_fork(args.cpu)  # run parallel code with mpi
+    # mpi_fork(args.cpu)  # run parallel code with mpi
 
     from spinup.utils.run_utils import setup_logger_kwargs
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
+    print("HIDDEN SIZES HERE: " + str([args.hid]*args.l))
+
     vpg(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, 
         seed=args.seed, steps_per_epoch=args.steps, epochs=args.epochs,
-        logger_kwargs=logger_kwargs)
+        logger_kwargs=logger_kwargs, train_v_iters=10, pi_lr=1e-3, lam=0.95)

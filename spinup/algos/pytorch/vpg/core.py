@@ -93,6 +93,45 @@ class MLPGaussianActor(Actor):
     def _log_prob_from_distribution(self, pi, act):
         return pi.log_prob(act).sum(axis=-1)    # Last axis sum needed for Torch Normal distribution
 
+class DiagonalGaussianDistribution:
+
+    def __init__(self, mu, log_std):
+        self.mu = mu
+        self.log_std = log_std
+        self.distribution = torch.distributions.multivariate_normal.MultivariateNormal(loc=self.mu,
+                            covariance_matrix=torch.diag(torch.exp(self.log_std)**2))
+
+    def sample(self):
+        # Variance is equal to std_dev^2
+        return self.distribution.sample()
+
+    def log_prob(self, data):
+        return self.distribution.log_prob(data)
+
+    def entropy(self):
+        return self.distribution.entropy()
+
+class UserMLPGaussianActor(Actor):
+    def __init__(self, obs_dim, act_dim, hidden_sizes, activation):
+        # Need to call nn.Module.__init__() first
+        super().__init__()
+        self.mu_net = mlp([obs_dim] + hidden_sizes + [act_dim], activation)
+        self.log_std = nn.Parameter(torch.Tensor(act_dim).fill_(-0.5))
+
+    def _distribution(self, obs):
+        mu = self.mu_net(obs)
+        return DiagonalGaussianDistribution(mu, self.log_std)
+
+    def forward(self, obs, act=None):
+        mu = self.mu_net(obs)
+        pi = DiagonalGaussianDistribution(mu, self.log_std)
+        logp_a = None
+        if act is not None:
+            logp_a = pi.log_prob(act)
+        return pi, logp_a
+
+    def _log_prob_from_distribution(self, pi, act):
+        return pi.log_prob(act).sum(axis=-1)  # Last axis sum needed for Torch Normal distribution
 
 class MLPCritic(nn.Module):
 
@@ -116,7 +155,7 @@ class MLPActorCritic(nn.Module):
 
         # policy builder depends on action space
         if isinstance(action_space, Box):
-            self.pi = MLPGaussianActor(obs_dim, action_space.shape[0], hidden_sizes, activation)
+            self.pi = UserMLPGaussianActor(obs_dim, action_space.shape[0], hidden_sizes, activation)
         elif isinstance(action_space, Discrete):
             self.pi = MLPCategoricalActor(obs_dim, action_space.n, hidden_sizes, activation)
 

@@ -10,7 +10,6 @@ Exercise 1.2: PPO Gaussian Policy
 
 You will implement an MLP diagonal Gaussian policy for PPO by
 writing an MLP-builder, and a few other key functions.
-
 Log-likelihoods will be computed using your answer to Exercise 1.1,
 so make sure to complete that exercise before beginning this one.
 
@@ -22,7 +21,7 @@ def mlp(sizes, activation, output_activation=nn.Identity):
 
     Args:
         sizes: Tuple, list, or other iterable giving the number of units
-            for each layer of the MLP. 
+            for each layer of the MLP.
 
         activation: Activation function for all layers except last.
 
@@ -30,15 +29,16 @@ def mlp(sizes, activation, output_activation=nn.Identity):
 
     Returns:
         A PyTorch module that can be called to give the output of the MLP.
-        (Use an nn.Sequential module.)
 
+        (Use an nn.Sequential module.)
     """
-    #######################
-    #                     #
-    #   YOUR CODE HERE    #
-    #                     #
-    #######################
-    pass
+    num_layers = len(sizes)
+    layers = []
+    for i in range(num_layers-2):
+        layers += [nn.Linear(sizes[i], sizes[i+1]), activation()]
+    layers += [nn.Linear(sizes[num_layers-2], sizes[num_layers-1]), output_activation()]
+
+    return nn.Sequential(*layers)
 
 class DiagonalGaussianDistribution:
 
@@ -52,12 +52,8 @@ class DiagonalGaussianDistribution:
             A PyTorch Tensor of samples from the diagonal Gaussian distribution with
             mean and log_std given by self.mu and self.log_std.
         """
-        #######################
-        #                     #
-        #   YOUR CODE HERE    #
-        #                     #
-        #######################
-        pass
+        return torch.distributions.multivariate_normal.MultivariateNormal(loc = self.mu,
+                covariance_matrix=torch.diag(torch.exp(self.log_std)**2)).sample()
 
     #================================(Given, ignore)==========================================#
     def log_prob(self, value):
@@ -76,18 +72,13 @@ class MLPGaussianActor(nn.Module):
         Initialize an MLP Gaussian Actor by making a PyTorch module for computing the
         mean of the distribution given a batch of observations, and a log_std parameter.
 
-        Make log_std a PyTorch Parameter with the same shape as the action vector, 
+        Make log_std a PyTorch Parameter with the same shape as the action vector,
         independent of observations, initialized to [-0.5, -0.5, ..., -0.5].
         (Make sure it's trainable!)
         """
-        #######################
-        #                     #
-        #   YOUR CODE HERE    #
-        #                     #
-        #######################
-        # self.log_std = 
-        # self.mu_net = 
-        pass 
+
+        self.log_std = nn.Parameter(torch.Tensor(act_dim).fill_(-0.5))
+        self.mu_net = mlp([obs_dim] + list(hidden_sizes) + [act_dim], activation=activation)
 
     #================================(Given, ignore)==========================================#
     def forward(self, obs, act=None):
@@ -118,7 +109,7 @@ if __name__ == '__main__':
     logdir = "/tmp/experiments/%i"%int(time.time())
 
     ActorCritic = partial(exercise1_2_auxiliary.ExerciseActorCritic, actor=MLPGaussianActor)
-    
+
     ppo(env_fn = lambda : gym.make('InvertedPendulum-v2'),
         actor_critic=ActorCritic,
         ac_kwargs=dict(hidden_sizes=(64,)),

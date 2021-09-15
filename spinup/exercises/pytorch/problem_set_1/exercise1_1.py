@@ -1,14 +1,15 @@
 import torch
+import math
 import numpy as np
 
 """
 
 Exercise 1.1: Diagonal Gaussian Likelihood
 
-Write a function that takes in PyTorch Tensors for the means and 
-log stds of a batch of diagonal Gaussian distributions, along with a 
-PyTorch Tensor for (previously-generated) samples from those 
-distributions, and returns a Tensor containing the log 
+Write a function that takes in PyTorch Tensors for the means and
+log stds of a batch of diagonal Gaussian distributions, along with a
+PyTorch Tensor for (previously-generated) samples from those
+distributions, and returns a Tensor containing the log
 likelihoods of those samples.
 
 """
@@ -23,12 +24,12 @@ def gaussian_likelihood(x, mu, log_std):
     Returns:
         Tensor with shape [batch]
     """
-    #######################
-    #                     #
-    #   YOUR CODE HERE    #
-    #                     #
-    #######################
-    return torch.zeros(1)
+    k = x.shape[-1]
+    if k > 1 :
+        pass
+    presum = (((x-mu)**2) / (torch.exp(log_std)**2) + 2*log_std)
+    summation = presum.sum(dim=-1)
+    return -0.5 * (summation + k*torch.log(torch.tensor(2*math.pi)))
 
 
 if __name__ == '__main__':
